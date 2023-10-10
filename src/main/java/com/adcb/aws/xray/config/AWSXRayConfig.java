@@ -20,15 +20,37 @@ import com.amazonaws.xray.strategy.sampling.CentralizedSamplingStrategy;
 
 import lombok.extern.slf4j.Slf4j;
 
+//@Slf4j
 @Configuration
 public class AWSXRayConfig {
 	
 	@Value("${spring.application.name}")
 	private String AWSXRAY_SEGMENT_NAME;
 	
+	private static final String SAMPLING_RULE_JSON = "classpath:xray/sampling-rules.json";
+
+	static {
+
+		URL ruleFile = null;
+		try {
+			ruleFile = ResourceUtils.getURL(SAMPLING_RULE_JSON);
+		} catch (FileNotFoundException e) {
+			//log.error("sampling rule cannot load for aws xray - {}", e.getMessage());
+		}
+		//log.debug("sampling rule load from {} for aws xray", ruleFile.getPath());
+
+		AWSXRayRecorderBuilder builder = AWSXRayRecorderBuilder.standard()
+			.withDefaultPlugins()
+			.withSamplingStrategy(new CentralizedSamplingStrategy(ruleFile))
+			.withSegmentListener(new SLF4JSegmentListener());
+
+		AWSXRay.setGlobalRecorder(builder.build());
+		//log.debug("aws xray recorder was setted globally.");
+	}
 
 	@Bean
 	public Filter TracingFilter() {
+		//log.debug("The segment name for aws xray tracking has been set to {}.", AWSXRAY_SEGMENT_NAME);
 		return new AWSXRayServletFilter(
 				Optional.ofNullable(AWSXRAY_SEGMENT_NAME)
 						.orElseThrow(()->new ApplicationNameNullException())
